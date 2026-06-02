@@ -22,3 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# --- 아래부터 RAG 백엔드 및 파이썬 관련 설정 추가 ---
+.env
+chroma_db/
+__pycache__/
+venv/
