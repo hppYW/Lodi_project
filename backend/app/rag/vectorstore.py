@@ -6,7 +6,7 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 from langchain_community.vectorstores import Chroma
 # 방금 만든 embeddings.py에서 함수들을 가져옵니다.
-from embeddings import get_embedding_model, load_and_chunk_pdf
+from .embeddings import get_embedding_model, load_and_chunk_pdf
 
 def create_vector_db():
     # 1. 경로 설정
