@@ -29,15 +29,16 @@
 
 import os
 from dotenv import load_dotenv
-from langchain_huggingface import HuggingFaceEndpoint, ChatHuggingFace
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough, RunnableLambda
 from langchain_core.documents import Document
 from langchain_core.runnables.history import RunnableWithMessageHistory
-from .vectorstore import load_vectorstore, search_with_reranking
+from .vectorstore import get_vectorstore, search_with_reranking
 from .memory import get_session_history
 
+# backend/.env 에서 GOOGLE_API_KEY 로드
 load_dotenv()
 
 
@@ -146,42 +147,34 @@ SYSTEM_PROMPT = (
 # 3. LLM 인스턴스 생성
 # ────────────────────────────────────────────────────────────
 
-def _build_llm() -> ChatHuggingFace:
+def _build_llm() -> ChatGoogleGenerativeAI:
     """
-    HuggingFace LLM 인스턴스를 생성합니다.
+    Google Gemini LLM 인스턴스를 생성합니다.
 
-    [모델 선택 이유: Qwen2.5-7B-Instruct]
-      - 한국어 이해도가 높고, Instruction Following(지시 수행) 성능 우수
-      - 오픈소스이므로 HuggingFace 무료 Inference API로 사용 가능
-      - 7B 파라미터로 속도와 품질의 적절한 균형
+    [모델: gemini-2.0-flash]
+      - 한국어 성능 우수, 빠른 응답 속도
+      - 무료 API 티어에서 사용 가능
 
     [temperature=0.1로 낮춘 이유]
-      - 높은 온도(0.7~1.0) = 창의적이지만 불안정한 답변
       - 법률 도메인에서는 '창의성'이 곧 '할루시네이션'
       - 0.1로 설정하여 일관성 있고 보수적인 답변 유도
 
-    [max_new_tokens=1024]
-      - 법 조항 인용 + 쉬운 설명 + 출처 표기에 충분한 길이
-      - 너무 짧으면 답변이 잘리고, 너무 길면 불필요한 내용 생성
-
     Returns:
-        ChatHuggingFace 인스턴스 (대화형 LLM)
+        ChatGoogleGenerativeAI 인스턴스 (대화형 LLM)
     """
-    llm = HuggingFaceEndpoint(
-        repo_id="Qwen/Qwen2.5-7B-Instruct",
-        task="text-generation",
-        max_new_tokens=1024,
+    return ChatGoogleGenerativeAI(
+        model="gemini-2.0-flash",
         temperature=0.1,
-        huggingfacehub_api_token=os.getenv("HUGGINGFACE_API_KEY"),
+        max_output_tokens=1024,
+        google_api_key=os.getenv("GOOGLE_API_KEY"),
     )
-    return ChatHuggingFace(llm=llm)
 
 
 # ────────────────────────────────────────────────────────────
 # 4. Query Rewriting 실행 함수
 # ────────────────────────────────────────────────────────────
 
-def _rewrite_query(chat_llm: ChatHuggingFace, user_input: str) -> str:
+def _rewrite_query(chat_llm: ChatGoogleGenerativeAI, user_input: str) -> str:
     """
     사용자 질문을 검색에 최적화된 형태로 재작성합니다.
 
@@ -190,7 +183,7 @@ def _rewrite_query(chat_llm: ChatHuggingFace, user_input: str) -> str:
     서비스가 중단되지 않도록 합니다 (graceful degradation).
 
     Args:
-        chat_llm: HuggingFace Chat 모델 인스턴스
+        chat_llm: Google Gemini Chat 모델 인스턴스
         user_input: 사용자의 원본 질문
 
     Returns:
@@ -279,7 +272,7 @@ def get_rag_chain():
       └───────┬─────────┘
               ▼
       ┌─────────────────┐
-      │  LLM 답변 생성    │  Qwen2.5-7B-Instruct
+      │  LLM 답변 생성    │  Google Gemini 2.0 Flash
       └───────┬─────────┘
               ▼
       ┌─────────────────┐

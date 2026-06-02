@@ -3,7 +3,10 @@ import type { Theme, Message, Chat, AppState } from './types';
 import { Wordmark } from './mascot';
 import { Mascot } from './mascot';
 import { UserBubble, BotBubble, TypingBubble } from './components';
-import { findKBEntry, SUGGESTED_QUESTIONS, SEED_CHATS, fmtTime, groupChatsByDate } from './data';
+import { SUGGESTED_QUESTIONS, SEED_CHATS, fmtTime, groupChatsByDate } from './data';
+
+// 백엔드 API 주소 — uvicorn app.main:app --reload 로 실행
+const API_URL = 'http://localhost:8000';
 
 const STORAGE_KEY = 'lw-state-v1';
 
@@ -503,10 +506,10 @@ const App: React.FC = () => {
     const userMsg: Message = {
       id: 'u-' + now, role: 'user', text: trimmed, timestamp: fmtTime(now),
     };
-    const entry = findKBEntry(trimmed);
+    // 타이핑 표시 — API 응답 올 때까지 보여줄 로딩 애니메이션
     const typingMsg: Message = {
       id: 't-' + now, role: 'typing', text: '', timestamp: fmtTime(now),
-      searchingDocs: entry.searchingDocs,
+      searchingDocs: ['근로기준법', '최저임금법', '근로자퇴직급여 보장법'],
     };
 
     let chatId = state.activeChatId;
@@ -532,21 +535,49 @@ const App: React.FC = () => {
     setDraft('');
     setBusy(true);
 
-    setTimeout(() => {
-      const replyTime = Date.now();
-      const botMsg: Message = {
-        id: 'b-' + replyTime, role: 'bot',
-        text: entry.reply, timestamp: fmtTime(replyTime), sources: entry.sources,
-      };
-      setState(s => ({
-        ...s,
-        chats: s.chats.map(c => c.id === chatId
-          ? { ...c, updatedAt: replyTime,
-              messages: c.messages.filter(m => m.role !== 'typing').concat(botMsg) }
-          : c),
-      }));
-      setBusy(false);
-    }, 1600);
+    // 백엔드 RAG API 호출
+    fetch(`${API_URL}/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: trimmed, session_id: chatId || 'c-' + now }),
+    })
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
+      .then(data => {
+        const replyTime = Date.now();
+        const botMsg: Message = {
+          id: 'b-' + replyTime, role: 'bot',
+          text: data.reply, timestamp: fmtTime(replyTime),
+          sources: data.sources || [],
+        };
+        setState(s => ({
+          ...s,
+          chats: s.chats.map(c => c.id === chatId
+            ? { ...c, updatedAt: replyTime,
+                messages: c.messages.filter(m => m.role !== 'typing').concat(botMsg) }
+            : c),
+        }));
+      })
+      .catch(() => {
+        // 백엔드 미실행 또는 네트워크 오류 시 안내 메시지
+        const replyTime = Date.now();
+        const botMsg: Message = {
+          id: 'b-' + replyTime, role: 'bot',
+          text: '서버와 연결할 수 없습니다. 백엔드가 실행 중인지 확인해 주세요.\n\n'
+            + '실행 방법: cd backend && uvicorn app.main:app --reload',
+          timestamp: fmtTime(replyTime),
+        };
+        setState(s => ({
+          ...s,
+          chats: s.chats.map(c => c.id === chatId
+            ? { ...c, updatedAt: replyTime,
+                messages: c.messages.filter(m => m.role !== 'typing').concat(botMsg) }
+            : c),
+        }));
+      })
+      .finally(() => setBusy(false));
   }, [busy, state.activeChatId]);
 
   const handleSend = useCallback(() => send(draft), [send, draft]);

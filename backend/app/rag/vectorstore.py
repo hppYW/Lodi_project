@@ -49,6 +49,42 @@ def get_vectorstore():
     # 저장된 로컬 DB 불러오기
     return Chroma(persist_directory=db_dir, embedding_function=embedding_model)
 
+
+def search_with_reranking(
+    query: str,
+    k: int = 5,
+    score_threshold: float = 0.3,
+    top_n: int = 3,
+):
+    """
+    벡터 검색 후 유사도 점수 기반으로 관련성 낮은 문서를 필터링합니다.
+
+    [동작 방식]
+      1. Chroma에서 k개 후보 문서를 유사도 점수와 함께 검색
+      2. score_threshold 이상인 문서만 남김 (낮을수록 유사 — Chroma L2 거리 기준)
+      3. 상위 top_n개만 최종 반환
+
+    Args:
+        query: 검색 질문 (Query Rewriting 된 법률 키워드 중심 문장)
+        k: 초기 후보 문서 개수
+        score_threshold: 이 거리 이하인 문서만 통과 (작을수록 엄격)
+        top_n: 최종 반환할 문서 수
+    Returns:
+        관련성 높은 Document 리스트
+    """
+    vs = get_vectorstore()
+    # similarity_search_with_score: (Document, distance) 쌍 반환
+    # Chroma 기본 L2 거리 — 값이 작을수록 유사
+    results = vs.similarity_search_with_score(query, k=k)
+
+    # 거리 기준 필터링: threshold 이하만 통과
+    filtered = [(doc, score) for doc, score in results if score <= score_threshold]
+
+    # 거리 오름차순 정렬 후 상위 top_n개 반환
+    filtered.sort(key=lambda x: x[1])
+    return [doc for doc, _score in filtered[:top_n]]
+
+
 if __name__ == "__main__":
     # 로컬 테스트용 실행
     create_vector_db()
