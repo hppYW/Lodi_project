@@ -3,7 +3,7 @@ import type { Theme, Message, Chat, AppState } from './types';
 import { Wordmark } from './mascot';
 import { Mascot } from './mascot';
 import { UserBubble, BotBubble, TypingBubble } from './components';
-import { SUGGESTED_QUESTIONS, SEED_CHATS, fmtTime, groupChatsByDate } from './data';
+import { SUGGESTED_QUESTIONS, fmtTime, groupChatsByDate } from './data';
 
 // 백엔드 API 주소 — uvicorn app.main:app --reload 로 실행
 const API_URL = 'http://localhost:8000';
@@ -19,7 +19,7 @@ function loadState(): AppState {
     }
   } catch { /* ignore */ }
   return {
-    chats: SEED_CHATS,
+    chats: [],
     activeChatId: null,
     theme: 'light',
     sidebarOpen: true,
@@ -220,17 +220,6 @@ const Sidebar: React.FC<{
         )}
       </div>
 
-      <div style={{
-        borderTop: '1px solid var(--lw-line-soft)', padding: '10px 14px',
-        display: 'flex', alignItems: 'center', gap: 10, fontSize: 11.5, color: 'var(--lw-muted)',
-      }}>
-        <div style={{
-          width: 22, height: 22, borderRadius: '50%', background: 'var(--lw-pill)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontWeight: 600, color: 'var(--lw-ink-2)', fontSize: 10,
-        }}>김</div>
-        <span>김민재</span>
-      </div>
     </aside>
   );
 };

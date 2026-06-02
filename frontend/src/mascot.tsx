@@ -1,7 +1,7 @@
 import React from 'react';
 
 export const Mascot: React.FC<{ size?: number }> = ({ size = 32 }) => (
-  <svg width={size} height={size} viewBox="0 0 40 40" aria-label="Lori" role="img"
+  <svg width={size} height={size} viewBox="0 0 40 40" aria-label="Lodi" role="img"
        style={{ display: 'block', borderRadius: '50%' }}>
     <circle cx="20" cy="20" r="20" fill="#1A2B4A" />
     <rect x="19.25" y="10" width="1.5" height="20" fill="#fff" />

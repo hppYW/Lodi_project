@@ -59,7 +59,7 @@ export const BotBubble: React.FC<{ msg: Message }> = ({ msg }) => (
     <div style={{ flexShrink: 0, marginTop: 2 }}><Mascot size={32} /></div>
     <div style={{ flex: 1, minWidth: 0 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
-        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--lw-ink)' }}>Lori</span>
+        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--lw-ink)' }}>Lodi</span>
         <span style={{ fontSize: 10.5, color: 'var(--lw-muted)' }}>법률 어시스턴트 · {msg.timestamp}</span>
       </div>
       <div style={{
@@ -102,7 +102,7 @@ export const TypingBubble: React.FC<{ docs: string[] }> = ({ docs }) => (
     <div style={{ flexShrink: 0, marginTop: 2 }}><Mascot size={32} /></div>
     <div style={{ flex: 1 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
-        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--lw-ink)' }}>Lori</span>
+        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--lw-ink)' }}>Lodi</span>
         <span style={{ fontSize: 10.5, color: 'var(--lw-muted)' }}>공식 문서 검색 중…</span>
       </div>
       <div style={{
