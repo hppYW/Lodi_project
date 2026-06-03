@@ -1,33 +1,19 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import type { Theme, Message, Chat, AppState } from './types';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import type { Theme, Message, Chat } from './types';
 import { Wordmark } from './mascot';
 import { Mascot } from './mascot';
 import { UserBubble, BotBubble, TypingBubble } from './components';
-import { SUGGESTED_QUESTIONS, fmtTime, groupChatsByDate } from './data';
+import { SUGGESTED_QUESTIONS, fmtTime } from './data';
 
 // 백엔드 API 주소 — uvicorn app.main:app --reload 로 실행
 const API_URL = 'http://localhost:8000';
 
-const STORAGE_KEY = 'lw-state-v1';
-
-function loadState(): AppState {
+function loadTheme(): Theme {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (parsed && parsed.chats) return parsed;
-    }
+    const t = localStorage.getItem('lw-theme');
+    if (t === 'dark') return 'dark';
   } catch { /* ignore */ }
-  return {
-    chats: [],
-    activeChatId: null,
-    theme: 'light',
-    sidebarOpen: true,
-  };
-}
-
-function saveState(s: AppState) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); } catch { /* ignore */ }
+  return 'light';
 }
 
 const iconBtnStyle: React.CSSProperties = {
@@ -36,226 +22,33 @@ const iconBtnStyle: React.CSSProperties = {
   display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
 };
 
-const groupHeaderStyle: React.CSSProperties = {
-  display: 'flex', alignItems: 'center', gap: 6,
-  fontSize: 10.5, fontWeight: 600, color: 'var(--lw-muted)',
-  letterSpacing: '0.06em', padding: '6px 8px 4px',
-};
-
-// ─────────────────────────────────────────────────────────────
-// ChatItem
-// ─────────────────────────────────────────────────────────────
-const ChatItem: React.FC<{
-  chat: Chat; active: boolean;
-  onSelect: () => void; onTogglePin: () => void;
-}> = ({ chat, active, onSelect, onTogglePin }) => {
-  const [hover, setHover] = useState(false);
-  return (
-    <div
-      onClick={onSelect}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{
-        display: 'flex', alignItems: 'center', gap: 8,
-        padding: '7px 10px', borderRadius: 7, marginBottom: 1,
-        cursor: 'pointer',
-        background: active ? 'var(--lw-pill)' : (hover ? 'var(--lw-line-soft)' : 'transparent'),
-        color: active ? 'var(--lw-ink)' : 'var(--lw-ink-2)',
-        fontWeight: active ? 600 : 400, fontSize: 12.5,
-      }}>
-      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-        {chat.title}
-      </span>
-      {(hover || chat.pinned) && (
-        <button onClick={(e) => { e.stopPropagation(); onTogglePin(); }} style={{
-          border: 'none', background: 'transparent', cursor: 'pointer', padding: 2,
-          color: chat.pinned ? 'var(--lw-red)' : 'var(--lw-muted)',
-          display: 'flex', alignItems: 'center',
-        }} title={chat.pinned ? '즐겨찾기 해제' : '즐겨찾기'}>
-          <svg width="11" height="11" viewBox="0 0 24 24"
-               fill={chat.pinned ? 'currentColor' : 'none'} stroke="currentColor"
-               strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M14 2l1 7 5 3-6 1-2 9-2-9-6-1 5-3 1-7h4z" />
-          </svg>
-        </button>
-      )}
-      {active && !hover && !chat.pinned && (
-        <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--lw-red)', flexShrink: 0 }} />
-      )}
-    </div>
-  );
-};
-
-// ─────────────────────────────────────────────────────────────
-// Sidebar
-// ─────────────────────────────────────────────────────────────
-const Sidebar: React.FC<{
-  state: AppState;
-  onNewChat: () => void;
-  onSelect: (id: string) => void;
-  onTogglePin: (id: string) => void;
-  onCollapse: () => void;
-}> = ({ state, onNewChat, onSelect, onTogglePin, onCollapse }) => {
-  const [search, setSearch] = useState('');
-
-  if (!state.sidebarOpen) {
-    return (
-      <div style={{
-        width: 56, borderRight: '1px solid var(--lw-line)', background: 'var(--lw-surface)',
-        display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '14px 0', gap: 14,
-        flexShrink: 0,
-      }}>
-        <button onClick={onCollapse} style={{
-          width: 32, height: 32, borderRadius: 8, background: 'var(--lw-navy)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontFamily: '"Noto Serif KR", serif', fontWeight: 700, color: 'var(--lw-on-navy)', fontSize: 15,
-          border: 'none', cursor: 'pointer',
-        }} title="사이드바 열기">法</button>
-        <button onClick={onNewChat} style={iconBtnStyle} title="새 대화">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               strokeWidth="1.8" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
-        </button>
-      </div>
-    );
-  }
-
-  const filtered = search.trim()
-    ? state.chats.filter(c => c.title.toLowerCase().includes(search.toLowerCase().trim()))
-    : state.chats;
-  const pinned = filtered.filter(c => c.pinned);
-  const unpinned = filtered.filter(c => !c.pinned);
-  const groups = groupChatsByDate(unpinned);
-
-  return (
-    <aside style={{
-      width: 252, flexShrink: 0, borderRight: '1px solid var(--lw-line)',
-      background: 'var(--lw-surface)', display: 'flex', flexDirection: 'column',
-      fontSize: 13, color: 'var(--lw-ink-2)',
-    }}>
-      <div style={{ padding: '16px 16px 12px', display: 'flex', alignItems: 'center' }}>
-        <Wordmark />
-        <button onClick={onCollapse} style={{
-          marginLeft: 'auto', width: 26, height: 26, borderRadius: 6, border: 'none',
-          background: 'transparent', color: 'var(--lw-muted)', cursor: 'pointer',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }} title="사이드바 접기">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               strokeWidth="1.8" strokeLinecap="round"><path d="M15 6l-6 6 6 6" /></svg>
-        </button>
-      </div>
-
-      <div style={{ padding: '4px 12px 10px' }}>
-        <button onClick={onNewChat} style={{
-          width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-          padding: '10px 12px', borderRadius: 10, background: 'var(--lw-navy)',
-          color: 'var(--lw-on-navy)', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600,
-          fontFamily: 'inherit',
-        }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
-          새 대화 시작하기
-        </button>
-      </div>
-
-      <div style={{ padding: '2px 12px 14px' }}>
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 8,
-          padding: '7px 10px', borderRadius: 8,
-          background: 'var(--lw-line-soft)', color: 'var(--lw-muted)',
-        }}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               strokeWidth="2" strokeLinecap="round">
-            <circle cx="11" cy="11" r="6" /><path d="m20 20-3.5-3.5" />
-          </svg>
-          <input value={search} onChange={e => setSearch(e.target.value)}
-                 placeholder="대화 검색"
-                 style={{
-                   flex: 1, border: 'none', outline: 'none', background: 'transparent',
-                   fontSize: 12, color: 'var(--lw-ink)', fontFamily: 'inherit',
-                 }} />
-          {search && (
-            <button onClick={() => setSearch('')} style={{
-              border: 'none', background: 'transparent', color: 'var(--lw-muted)',
-              cursor: 'pointer', padding: 0, display: 'flex',
-            }}>
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                   strokeWidth="2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
-            </button>
-          )}
-        </div>
-      </div>
-
-      <div style={{ flex: 1, overflow: 'auto', padding: '0 12px 12px' }}>
-        {pinned.length > 0 && (
-          <div style={{ marginBottom: 14 }}>
-            <div style={groupHeaderStyle}>
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M14 2l1 7 5 3-6 1-2 9-2-9-6-1 5-3 1-7h4z" opacity="0.85" />
-              </svg>
-              즐겨찾기
-            </div>
-            {pinned.map(c => (
-              <ChatItem key={c.id} chat={c} active={c.id === state.activeChatId}
-                        onSelect={() => onSelect(c.id)}
-                        onTogglePin={() => onTogglePin(c.id)} />
-            ))}
-          </div>
-        )}
-
-        {groups.map(g => (
-          <div key={g.group} style={{ marginBottom: 14 }}>
-            <div style={groupHeaderStyle}>{g.group}</div>
-            {g.items.map(c => (
-              <ChatItem key={c.id} chat={c} active={c.id === state.activeChatId}
-                        onSelect={() => onSelect(c.id)}
-                        onTogglePin={() => onTogglePin(c.id)} />
-            ))}
-          </div>
-        ))}
-
-        {filtered.length === 0 && (
-          <div style={{ padding: '20px 8px', color: 'var(--lw-muted)', fontSize: 12, textAlign: 'center' }}>
-            검색 결과가 없습니다
-          </div>
-        )}
-      </div>
-
-    </aside>
-  );
-};
-
 // ─────────────────────────────────────────────────────────────
 // TopBar
 // ─────────────────────────────────────────────────────────────
 const TopBar: React.FC<{
-  sidebarOpen: boolean; onToggleSidebar: () => void;
   theme: Theme; onToggleTheme: () => void;
-  chatTitle?: string;
-}> = ({ sidebarOpen, onToggleSidebar, theme, onToggleTheme, chatTitle }) => (
+  onNewChat: () => void; hasMessages: boolean;
+}> = ({ theme, onToggleTheme, onNewChat, hasMessages }) => (
   <header style={{
     height: 52, borderBottom: '1px solid var(--lw-line)',
     background: 'var(--lw-surface)', display: 'flex', alignItems: 'center',
     padding: '0 20px', gap: 12, flexShrink: 0,
   }}>
-    <button onClick={onToggleSidebar} style={{ ...iconBtnStyle, width: 30, height: 30 }}
-            title={sidebarOpen ? '사이드바 접기' : '사이드바 열기'}>
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-           strokeWidth="1.8" strokeLinecap="round">
-        <rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" />
-      </svg>
-    </button>
-
-    {!sidebarOpen && <div style={{ marginLeft: 2 }}><Wordmark /></div>}
-
-    {chatTitle && sidebarOpen && (
-      <div style={{
-        fontSize: 13, fontWeight: 600, color: 'var(--lw-ink)',
-        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-        maxWidth: 380,
-      }}>{chatTitle}</div>
-    )}
+    <Wordmark />
 
     <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+      {hasMessages && (
+        <button onClick={onNewChat} style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          padding: '6px 12px', borderRadius: 8, border: '1px solid var(--lw-line)',
+          background: 'transparent', color: 'var(--lw-ink-2)',
+          fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+        }} title="새 대화">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+          새 대화
+        </button>
+      )}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 6,
         padding: '5px 10px', borderRadius: 999, background: 'var(--lw-line-soft)',
@@ -286,7 +79,7 @@ const TopBar: React.FC<{
 // ─────────────────────────────────────────────────────────────
 // Welcome screen
 // ─────────────────────────────────────────────────────────────
-const WelcomeScreen: React.FC<{ onPick: (q: string) => void; chatCount: number }> = ({ onPick, chatCount }) => (
+const WelcomeScreen: React.FC<{ onPick: (q: string) => void }> = ({ onPick }) => (
   <div style={{
     flex: 1, display: 'flex', flexDirection: 'column',
     alignItems: 'center', justifyContent: 'center',
@@ -315,12 +108,10 @@ const WelcomeScreen: React.FC<{ onPick: (q: string) => void; chatCount: number }
     }}>
       <span>공식 문서 <span style={{ color: 'var(--lw-ink-2)', fontWeight: 600 }}>87</span>건</span>
       <span style={{ width: 3, height: 3, background: 'var(--lw-line)', borderRadius: '50%' }} />
-      <span>나의 대화 <span style={{ color: 'var(--lw-ink-2)', fontWeight: 600 }}>{chatCount}</span>건</span>
-      <span style={{ width: 3, height: 3, background: 'var(--lw-line)', borderRadius: '50%' }} />
       <span>추측 답변 <span style={{ color: 'var(--lw-red)', fontWeight: 600 }}>0</span>건</span>
     </div>
 
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center', maxWidth: 560 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, maxWidth: 460 }}>
       {SUGGESTED_QUESTIONS.map((q, i) => (
         <button key={i} onClick={() => onPick(q)} style={{
           padding: '10px 14px', borderRadius: 10, border: '1px solid var(--lw-line)',
@@ -353,17 +144,6 @@ const Conversation: React.FC<{ chat: Chat }> = ({ chat }) => {
   return (
     <div ref={scrollRef} style={{ flex: 1, overflow: 'auto', padding: '28px 24px 8px' }}>
       <div style={{ maxWidth: 760, margin: '0 auto' }}>
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 10,
-          paddingBottom: 20, marginBottom: 20, borderBottom: '1px solid var(--lw-line)',
-        }}>
-          <span style={{
-            fontFamily: '"JetBrains Mono", monospace', fontSize: 10, color: 'var(--lw-muted)',
-            padding: '2px 7px', borderRadius: 4, border: '1px solid var(--lw-line)',
-          }}>#{chat.id.slice(-4).toUpperCase()}</span>
-          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--lw-ink)' }}>{chat.title}</span>
-        </div>
-
         {chat.messages.map(m => {
           if (m.role === 'user') return <UserBubble key={m.id} text={m.text} />;
           if (m.role === 'typing') return <TypingBubble key={m.id} docs={m.searchingDocs || []} />;
@@ -407,7 +187,7 @@ const Composer: React.FC<{
         maxWidth: 760, margin: '0 auto', background: 'var(--lw-surface)',
         border: '1px solid var(--lw-line)', borderRadius: 16,
         padding: '10px 12px 10px 18px',
-        display: 'flex', alignItems: 'flex-end', gap: 10,
+        display: 'flex', alignItems: 'center', gap: 10,
         transition: 'border-color .15s',
       }}>
         <textarea
@@ -416,9 +196,9 @@ const Composer: React.FC<{
           placeholder="질문을 입력하세요 — 예: 주휴수당 계산법"
           style={{
             flex: 1, border: 'none', outline: 'none', resize: 'none',
-            background: 'transparent', fontSize: 14, lineHeight: 1.5,
+            background: 'transparent', fontSize: 14, lineHeight: '34px',
             color: 'var(--lw-ink)', fontFamily: 'inherit',
-            minHeight: 24, maxHeight: 160, padding: '4px 0',
+            minHeight: 34, maxHeight: 160, padding: 0,
           }} />
         <button disabled={disabled || !value.trim()} onClick={onSend} style={{
           height: 34, padding: '0 14px 0 12px', borderRadius: 10,
@@ -452,39 +232,24 @@ const Composer: React.FC<{
 // App
 // ─────────────────────────────────────────────────────────────
 const App: React.FC = () => {
-  const [state, setState] = useState<AppState>(() => loadState());
+  const [theme, setTheme] = useState<Theme>(loadTheme);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [sessionId, setSessionId] = useState(() => 'c-' + Date.now());
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => { saveState(state); }, [state]);
-
-  const activeChat = useMemo(
-    () => state.chats.find(c => c.id === state.activeChatId) || null,
-    [state.chats, state.activeChatId]
-  );
-
-  const newChat = useCallback(() => {
-    setState(s => ({ ...s, activeChatId: null }));
-    setDraft('');
-  }, []);
-
-  const selectChat = useCallback((id: string) => {
-    setState(s => ({ ...s, activeChatId: id }));
-  }, []);
-
-  const togglePin = useCallback((id: string) => {
-    setState(s => ({
-      ...s,
-      chats: s.chats.map(c => c.id === id ? { ...c, pinned: !c.pinned } : c),
-    }));
-  }, []);
-
-  const toggleSidebar = useCallback(() => {
-    setState(s => ({ ...s, sidebarOpen: !s.sidebarOpen }));
-  }, []);
+  useEffect(() => {
+    try { localStorage.setItem('lw-theme', theme); } catch { /* ignore */ }
+  }, [theme]);
 
   const toggleTheme = useCallback(() => {
-    setState(s => ({ ...s, theme: s.theme === 'light' ? 'dark' : 'light' }));
+    setTheme(t => t === 'light' ? 'dark' : 'light');
+  }, []);
+
+  const newChat = useCallback(() => {
+    setMessages([]);
+    setSessionId('c-' + Date.now());
+    setDraft('');
   }, []);
 
   const send = useCallback((text: string) => {
@@ -495,40 +260,19 @@ const App: React.FC = () => {
     const userMsg: Message = {
       id: 'u-' + now, role: 'user', text: trimmed, timestamp: fmtTime(now),
     };
-    // 타이핑 표시 — API 응답 올 때까지 보여줄 로딩 애니메이션
     const typingMsg: Message = {
       id: 't-' + now, role: 'typing', text: '', timestamp: fmtTime(now),
       searchingDocs: ['근로기준법', '최저임금법', '근로자퇴직급여 보장법'],
     };
 
-    let chatId = state.activeChatId;
-    setState(s => {
-      let chats = s.chats;
-      if (!chatId) {
-        const newId = 'c-' + now;
-        chatId = newId;
-        const newChatObj: Chat = {
-          id: newId,
-          title: trimmed.length > 24 ? trimmed.slice(0, 24) + '…' : trimmed,
-          createdAt: now, updatedAt: now, pinned: false,
-          messages: [userMsg, typingMsg],
-        };
-        chats = [newChatObj, ...chats];
-      } else {
-        chats = chats.map(c => c.id === chatId
-          ? { ...c, updatedAt: now, messages: [...c.messages, userMsg, typingMsg] }
-          : c);
-      }
-      return { ...s, chats, activeChatId: chatId };
-    });
+    setMessages(prev => [...prev, userMsg, typingMsg]);
     setDraft('');
     setBusy(true);
 
-    // 백엔드 RAG API 호출
     fetch(`${API_URL}/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question: trimmed, session_id: chatId || 'c-' + now }),
+      body: JSON.stringify({ question: trimmed, session_id: sessionId }),
     })
       .then(res => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -541,16 +285,9 @@ const App: React.FC = () => {
           text: data.reply, timestamp: fmtTime(replyTime),
           sources: data.sources || [],
         };
-        setState(s => ({
-          ...s,
-          chats: s.chats.map(c => c.id === chatId
-            ? { ...c, updatedAt: replyTime,
-                messages: c.messages.filter(m => m.role !== 'typing').concat(botMsg) }
-            : c),
-        }));
+        setMessages(prev => prev.filter(m => m.role !== 'typing').concat(botMsg));
       })
       .catch(() => {
-        // 백엔드 미실행 또는 네트워크 오류 시 안내 메시지
         const replyTime = Date.now();
         const botMsg: Message = {
           id: 'b-' + replyTime, role: 'bot',
@@ -558,16 +295,10 @@ const App: React.FC = () => {
             + '실행 방법: cd backend && uvicorn app.main:app --reload',
           timestamp: fmtTime(replyTime),
         };
-        setState(s => ({
-          ...s,
-          chats: s.chats.map(c => c.id === chatId
-            ? { ...c, updatedAt: replyTime,
-                messages: c.messages.filter(m => m.role !== 'typing').concat(botMsg) }
-            : c),
-        }));
+        setMessages(prev => prev.filter(m => m.role !== 'typing').concat(botMsg));
       })
       .finally(() => setBusy(false));
-  }, [busy, state.activeChatId]);
+  }, [busy, sessionId]);
 
   const handleSend = useCallback(() => send(draft), [send, draft]);
   const handlePick = useCallback((q: string) => {
@@ -576,29 +307,22 @@ const App: React.FC = () => {
   }, [send]);
 
   return (
-    <div className="lw" data-theme={state.theme} style={{
+    <div className="lw" data-theme={theme} style={{
       width: '100%', height: '100%', background: 'var(--lw-bg)', color: 'var(--lw-ink)',
       fontFamily: '"Noto Sans KR", system-ui, sans-serif',
-      display: 'flex', overflow: 'hidden',
+      display: 'flex', flexDirection: 'column', overflow: 'hidden',
     }}>
-      <Sidebar state={state}
-               onNewChat={newChat} onSelect={selectChat}
-               onTogglePin={togglePin} onCollapse={toggleSidebar} />
+      <TopBar theme={theme} onToggleTheme={toggleTheme}
+              onNewChat={newChat} hasMessages={messages.length > 0} />
 
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-        <TopBar sidebarOpen={state.sidebarOpen} onToggleSidebar={toggleSidebar}
-                theme={state.theme} onToggleTheme={toggleTheme}
-                chatTitle={activeChat?.title} />
+      {messages.length > 0 ? (
+        <Conversation chat={{ id: sessionId, title: '', createdAt: 0, updatedAt: 0, pinned: false, messages }} />
+      ) : (
+        <WelcomeScreen onPick={handlePick} />
+      )}
 
-        {activeChat && activeChat.messages.length > 0 ? (
-          <Conversation chat={activeChat} />
-        ) : (
-          <WelcomeScreen onPick={handlePick} chatCount={state.chats.length} />
-        )}
-
-        <Composer value={draft} onChange={setDraft}
-                  onSend={handleSend} disabled={busy} />
-      </div>
+      <Composer value={draft} onChange={setDraft}
+                onSend={handleSend} disabled={busy} />
     </div>
   );
 };

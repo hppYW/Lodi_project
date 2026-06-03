@@ -28,9 +28,3 @@ export interface Chat {
   messages: Message[];
 }
 
-export interface AppState {
-  chats: Chat[];
-  activeChatId: string | null;
-  theme: Theme;
-  sidebarOpen: boolean;
-}
