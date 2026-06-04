@@ -111,6 +111,7 @@ SYSTEM_PROMPT = (
     '고용노동부(☎ 1350)에 문의해 주세요."\n'
     "5. 한국어로, 알바생도 이해할 수 있게 쉽고 친절하게 답변하세요.\n"
     "6. 법 조항 번호가 애매하면 인용하지 마세요.\n"
+    "7. 답변은 300자 이내로 핵심만 간결하게 작성하세요.\n"
     "\n"
     "━━━ 질문 유형별 답변 가이드 ━━━\n"
     "• 계산형 질문 (예: 주휴수당 얼마?):\n"
@@ -163,9 +164,9 @@ def _build_llm() -> ChatGoogleGenerativeAI:
         ChatGoogleGenerativeAI 인스턴스 (대화형 LLM)
     """
     return ChatGoogleGenerativeAI(
-        model="gemini-2.0-flash",
+        model="gemini-2.5-flash",
         temperature=0.1,
-        max_output_tokens=1024,
+        max_output_tokens=4096,
         google_api_key=os.getenv("GOOGLE_API_KEY"),
     )
 
@@ -310,26 +311,38 @@ def get_rag_chain():
         """
         user_input = input_dict["input"]
 
-        # Query Rewriting: 구어체 → 법률 용어 변환
-        # 예: "알바 짤렸는데" → "아르바이트 부당해고 해고예고수당"
         rewritten_query = _rewrite_query(chat_llm, user_input)
+        print(f"[DEBUG] 원본: {user_input}")
+        print(f"[DEBUG] 재작성: {rewritten_query}")
 
-        # Re-ranking이 적용된 벡터 검색 수행
-        # vectorstore.py의 search_with_reranking 함수가
-        # 유사도 점수 기반으로 관련 없는 문서를 자동 필터링합니다.
         relevant_docs = search_with_reranking(
             query=rewritten_query,
-            k=5,                    # 초기 후보 5개 검색 (넉넉하게)
-            score_threshold=0.3,    # 유사도 0.3 미만 문서 제거
-            top_n=3,                # 최종 3개 문서만 LLM에 전달
+            k=10,
+            score_threshold=1.5,
+            top_n=5,
         )
 
-        # 검색 결과가 없으면 빈 컨텍스트 반환
-        # → 시스템 프롬프트 규칙 4에 의해 "찾을 수 없습니다" 응답이 유도됨
+        # 재작성 쿼리로 부족하면 원본으로도 검색해서 합침
+        if len(relevant_docs) < 3 and rewritten_query != user_input:
+            extra = search_with_reranking(
+                query=user_input, k=10, score_threshold=1.5, top_n=5,
+            )
+            seen = {doc.page_content for doc in relevant_docs}
+            for doc in extra:
+                if doc.page_content not in seen:
+                    relevant_docs.append(doc)
+                    seen.add(doc.page_content)
+
+        print(f"[DEBUG] 검색 결과: {len(relevant_docs)}개")
+        for doc in relevant_docs:
+            print(f"[DEBUG]   - {doc.page_content[:60]}")
+
         if not relevant_docs:
             return "(검색된 관련 문서가 없습니다)"
 
-        return _format_docs(relevant_docs)
+        context = _format_docs(relevant_docs)
+        print(f"[DEBUG] 컨텍스트 길이: {len(context)}자")
+        return context
 
     # ── 답변 생성 프롬프트 구성 ──
     # system: 할루시네이션 차단 규칙 + Few-shot 예시 + 검색된 문서(context)

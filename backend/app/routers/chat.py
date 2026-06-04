@@ -111,6 +111,8 @@ async def chat(req: ChatRequest):
         )
         answer = response.get("answer", str(response)) if isinstance(response, dict) else str(response)
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         answer = (
             "죄송합니다, 답변 생성 중 오류가 발생했습니다. "
             "잠시 후 다시 시도해 주세요."
