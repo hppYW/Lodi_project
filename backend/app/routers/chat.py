@@ -17,6 +17,7 @@
     ③ 응답 반환 { reply, sources, searchingDocs }
 """
 from __future__ import annotations
+import re
 from fastapi import APIRouter
 from pydantic import BaseModel
 
@@ -45,6 +46,61 @@ class ChatResponse(BaseModel):
     reply: str
     sources: list[SourceItem]
     searchingDocs: list[str]
+
+
+# ──────────────────────────────────────────────────────────────
+# context 문자열 → SourceItem 파싱
+# ──────────────────────────────────────────────────────────────
+def _clean_text(text: str) -> str:
+    """PDF 파싱 아티팩트(깨진 문자) 제거 후 다중 공백 정리."""
+    cleaned = re.sub(r'[^가-힣㄰-㆏ -~·\n]', ' ', text)
+    return re.sub(r' {2,}', ' ', cleaned).strip()
+
+
+def _parse_sources(context: str) -> tuple[list[SourceItem], list[str]]:
+    """RAG 체인이 반환한 context 문자열에서 출처 정보를 파싱합니다."""
+    if not context or "(검색된 관련 문서가 없습니다)" in context:
+        return [], []
+
+    sources: list[SourceItem] = []
+    doc_names: list[str] = []
+    seen: set[tuple[str, str]] = set()
+
+    for section in re.split(r'\n\n---\n\n', context):
+        header_match = re.match(r'\[문서 \d+\] (.+)', section)
+        if not header_match:
+            continue
+
+        raw_name = re.sub(r'\s*\(p\.\d+\)\s*$', '', header_match.group(1)).strip()
+        # 전체 경로("/", "\\" 포함)면 파일명만 추출하고 .pdf 제거
+        doc_name = re.split(r'[/\\]', raw_name)[-1]
+        doc_name = re.sub(r'\.pdf$', '', doc_name, flags=re.IGNORECASE).strip()
+
+        content = section[header_match.end():].strip()
+        content = re.sub(r'^\[[^\]]+\]\n?', '', content).strip()
+
+        articles = re.findall(r'제\d+조(?:의\d+)?', content)
+        article = articles[0] if articles else ""
+
+        # (문서명, 조항) 조합 중복 제거
+        key = (doc_name, article)
+        if key in seen:
+            continue
+        seen.add(key)
+
+        quote = _clean_text(content[:120])[:100] if content else None
+
+        if doc_name not in doc_names:
+            doc_names.append(doc_name)
+
+        sources.append(SourceItem(
+            doc=doc_name,
+            article=article,
+            highlight=bool(article),
+            quote=quote,
+        ))
+
+    return sources, doc_names
 
 
 # ──────────────────────────────────────────────────────────────
@@ -103,6 +159,7 @@ async def chat(req: ChatRequest):
         )
 
     # ── ② RAG 체인 호출 ──
+    context = ""
     try:
         chain = _get_rag_chain()
         response = chain.invoke(
@@ -110,6 +167,7 @@ async def chat(req: ChatRequest):
             config={"configurable": {"session_id": req.session_id}},
         )
         answer = response.get("answer", str(response)) if isinstance(response, dict) else str(response)
+        context = response.get("context", "") if isinstance(response, dict) else ""
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -118,10 +176,11 @@ async def chat(req: ChatRequest):
             "잠시 후 다시 시도해 주세요."
         )
 
+    sources, searching_docs = _parse_sources(context)
     return ChatResponse(
         reply=answer,
-        sources=[],
-        searchingDocs=[],
+        sources=sources,
+        searchingDocs=searching_docs,
     )
 
 
