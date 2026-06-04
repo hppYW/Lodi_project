@@ -1,55 +1,83 @@
 # backend/app/rag/embeddings.py
+import re
+import os
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import HuggingFaceEmbeddings
-import os
+from langchain_core.documents import Document
 
 def get_embedding_model():
-    # 무료이면서 한국어 성능이 뛰어난 로컬 임베딩 모델을 사용합니다.
     return HuggingFaceEmbeddings(
         model_name="jhgan/ko-sroberta-multitask",
-        model_kwargs={'device': 'cpu'}, # 컴퓨터에 GPU가 있다면 'cuda'로 변경
+        model_kwargs={'device': 'cpu'},
         encode_kwargs={'normalize_embeddings': True}
     )
 
+def clean_text(text: str) -> str:
+    """PDF에서 긁어온 텍스트의 불순물(노이즈)을 정교하게 제거합니다."""
+    # 1. 페이지 번호 및 머리말 제거 (예: "370/ 근로기준법 질의회시집", "258 / ...")
+    text = re.sub(r'\d+\s*/\s*[가-힣\s]+.*?\n', '', text)
+    # 2. 불필요하게 끊긴 줄바꿈을 하나로 병합 (단어 중간에 잘리는 현상 방지)
+    text = re.sub(r'(?<=[가-힣,])\n(?=[가-힣])', ' ', text)
+    # 3. 다중 줄바꿈 정리
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    return text.strip()
+
 def load_and_chunk_pdf(file_path: str):
-    print(f"[{file_path}] 문서를 불러오는 중...")
+    print(f"[{os.path.basename(file_path)}] 텍스트 정제 및 의미론적 분할(Semantic Chunking) 중...")
 
-    # 1. PDF 불러오기
     loader = PyPDFLoader(file_path)
-    documents = loader.load()
+    pages = loader.load()
+    doc_title = os.path.basename(file_path).replace(".pdf", "")
 
-    # 2. 텍스트 분할하기 (Chunking)
-    # 법률 문서는 조항이 잘리지 않도록 chunk_size를 넉넉하게 잡는 것이 좋습니다.
+    # 1. 문서 전체를 하나의 거대한 텍스트로 병합
+    full_text = ""
+    for page in pages:
+        full_text += clean_text(page.page_content) + "\n\n"
+
+    # 2. 1차 분할: 법 조항(제O조) 및 Q&A(질의/회시) 등 '의미 단위'로 쪼개기
+    # 정규식 Lookahead(?=)를 사용하여 기준점(제O조 등)이 날아가지 않고 조각의 맨 앞에 붙도록 함
+    semantic_chunks = re.split(r'(?=\n제\d+조|\n질의\s*:|\n회시\s*:|\nQ\.|\[질의\]|\[회시\])', full_text)
+
+    # 3. 2차 분할: 의미 단위로 잘랐는데도 너무 긴 녀석들을 위한 안전장치
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=800,
-        chunk_overlap=100,
-        separators=["\n제", "\n\n", "\n", " ", ""] # '제O조' 단위로 잘리도록 유도
+        chunk_size=1000,
+        chunk_overlap=200,
+        separators=["\n\n", "\n", ".", " "]
     )
 
-    chunks = text_splitter.split_documents(documents)
-    print(f"총 {len(chunks)}개의 텍스트 조각으로 분할되었습니다.")
+    final_documents = []
+    for chunk in semantic_chunks:
+        chunk = chunk.strip()
+        if len(chunk) < 20:  # 너무 짧은 쓰레기 조각(노이즈)은 버림
+            continue
 
-    return chunks
+        # 💡 [전문가의 핵심 팁: Context Enrichment]
+        # 조각만 덜렁 떼어놓으면 AI가 이게 무슨 법인지 모릅니다.
+        # 모든 조각의 맨 앞에 "[근로기준법]" 처럼 출처 꼬리표를 강제로 달아줍니다.
+        enriched_text = f"[{doc_title}]\n{chunk}"
 
-# --- 로컬 테스트용 실행 코드 ---
+        # 만약 조항 하나가 너무 길다면(1000자 초과) 한 번 더 예쁘게 자릅니다.
+        sub_chunks = text_splitter.split_text(enriched_text)
+
+        for sub in sub_chunks:
+            final_documents.append(Document(
+                page_content=sub,
+                metadata={"source": doc_title} # 메타데이터에도 출처 기록
+            ))
+
+    print(f" └─> 총 {len(final_documents)}개의 고품질 텍스트 조각 생성 완료.")
+    return final_documents
+
 if __name__ == "__main__":
-    import os
-
-    # 1. 현재 실행 중인 파이썬 파일(embeddings.py)의 절대 경로를 가져옵니다.
     current_file_path = os.path.abspath(__file__)
-    current_dir = os.path.dirname(current_file_path) # app/rag/ 폴더 위치
-
-    # 2. 현재 파일 위치를 기준으로 문서를 찾아갑니다. (가장 안전한 실무 방식)
-    # app/rag -> app -> backend -> data/documents
+    current_dir = os.path.dirname(current_file_path)
     target_path = os.path.join(current_dir, "../../data/documents/근로기준법.pdf")
-    pdf_path = os.path.normpath(target_path) # 경로를 OS에 맞게 깔끔하게 정리해줍니다.
-
-    print(f"👀 시스템이 찾고 있는 파일 경로: {pdf_path}")
+    pdf_path = os.path.normpath(target_path)
 
     if os.path.exists(pdf_path):
         chunks = load_and_chunk_pdf(pdf_path)
-        print("\n--- 첫 번째 조각 샘플 ---")
+        print("\n--- 💎 정제된 첫 번째 조각 샘플 ---")
         print(chunks[0].page_content)
     else:
-        print("\n🚨 경로에 PDF 파일이 없습니다. 파일명이나 폴더 구조를 다시 확인해주세요.")
+        print("\n🚨 PDF 파일을 찾을 수 없습니다.")

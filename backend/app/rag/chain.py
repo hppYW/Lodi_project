@@ -29,7 +29,8 @@
 
 import os
 from dotenv import load_dotenv
-from langchain_google_genai import ChatGoogleGenerativeAI
+# 1. Groq 패키지로 임포트 변경
+from langchain_upstage import ChatUpstage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough, RunnableLambda
@@ -38,7 +39,7 @@ from langchain_core.runnables.history import RunnableWithMessageHistory
 from .vectorstore import get_vectorstore, search_with_reranking
 from .memory import get_session_history
 
-# backend/.env 에서 GOOGLE_API_KEY 로드
+# backend/.env.example 에서 OPENAI_API_KEY 로드
 load_dotenv()
 
 
@@ -147,34 +148,21 @@ SYSTEM_PROMPT = (
 # 3. LLM 인스턴스 생성
 # ────────────────────────────────────────────────────────────
 
-def _build_llm() -> ChatGoogleGenerativeAI:
+def _build_llm() -> ChatUpstage:
     """
-    Google Gemini LLM 인스턴스를 생성합니다.
-
-    [모델: gemini-2.0-flash]
-      - 한국어 성능 우수, 빠른 응답 속도
-      - 무료 API 티어에서 사용 가능
-
-    [temperature=0.1로 낮춘 이유]
-      - 법률 도메인에서는 '창의성'이 곧 '할루시네이션'
-      - 0.1로 설정하여 일관성 있고 보수적인 답변 유도
-
-    Returns:
-        ChatGoogleGenerativeAI 인스턴스 (대화형 LLM)
+    Upstage (Solar) LLM 인스턴스를 생성합니다.
+    - 한국어 RAG 특화 모델, 지시사항 준수 능력이 탁월함.
     """
-    return ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash",
-        temperature=0.1,
-        max_output_tokens=4096,
-        google_api_key=os.getenv("GOOGLE_API_KEY"),
+    return ChatUpstage(
+        model="solar-1-mini-chat", # 업스테이지의 주력 빠르고 똑똑한 모델
+        temperature=0.1, # 똘똘한 모델이므로 다시 온도를 낮춰서 정확도에 집중
+        api_key=os.getenv("UPSTAGE_API_KEY"),
     )
-
-
 # ────────────────────────────────────────────────────────────
 # 4. Query Rewriting 실행 함수
 # ────────────────────────────────────────────────────────────
 
-def _rewrite_query(chat_llm: ChatGoogleGenerativeAI, user_input: str) -> str:
+def _rewrite_query(chat_llm: ChatUpstage, user_input: str) -> str:
     """
     사용자 질문을 검색에 최적화된 형태로 재작성합니다.
 
@@ -183,7 +171,7 @@ def _rewrite_query(chat_llm: ChatGoogleGenerativeAI, user_input: str) -> str:
     서비스가 중단되지 않도록 합니다 (graceful degradation).
 
     Args:
-        chat_llm: Google Gemini Chat 모델 인스턴스
+        chat_llm: OpenAI Chat 모델 인스턴스
         user_input: 사용자의 원본 질문
 
     Returns:
@@ -272,7 +260,7 @@ def get_rag_chain():
       └───────┬─────────┘
               ▼
       ┌─────────────────┐
-      │  LLM 답변 생성    │  Google Gemini 2.0 Flash
+      │  LLM 답변 생성    │  OpenAI gpt-4o-mini
       └───────┬─────────┘
               ▼
       ┌─────────────────┐
@@ -368,12 +356,12 @@ def get_rag_chain():
     #   → LLM이 답변 생성 → StrOutputParser가 문자열로 변환
     #   → 결과가 "answer" 키에 저장
     rag_chain = (
-        RunnablePassthrough.assign(
-            context=RunnableLambda(retrieve_with_rewriting)
-        )
-        | RunnablePassthrough.assign(
-            answer=prompt | chat_llm | StrOutputParser()
-        )
+            RunnablePassthrough.assign(
+                context=RunnableLambda(retrieve_with_rewriting)
+            )
+            | RunnablePassthrough.assign(
+        answer=prompt | chat_llm | StrOutputParser()
+    )
     )
 
     # ── 대화 히스토리 자동 관리 래핑 ──
