@@ -1,0 +1,261 @@
+{
+  "description": "RAG 체인 답변 품질 테스트셋. expected_keywords: 답변에 반드시 포함돼야 할 핵심 단어. expected_law: 인용돼야 할 법 조항(없으면 null). should_refuse: 문서 범위 밖이라 모른다고 해야 하는 케이스.",
+  "cases": [
+    {
+      "question": "주휴수당 계산법을 알려주세요",
+      "category": "주휴수당",
+      "expected_keywords": ["소정근로시간", "시급"],
+      "expected_law": "제55조",
+      "should_refuse": false,
+      "description": "주휴수당 기본 계산 공식 + 근로기준법 제55조 인용"
+    },
+    {
+      "question": "주 15시간 미만으로 일하면 주휴수당을 못 받나요?",
+      "category": "주휴수당",
+      "expected_keywords": ["15시간"],
+      "expected_law": null,
+      "should_refuse": false,
+      "description": "단시간 근로자 주휴수당 제외 기준"
+    },
+    {
+      "question": "결근하면 그 주 주휴수당이 없어지나요?",
+      "category": "주휴수당",
+      "expected_keywords": ["개근"],
+      "expected_law": null,
+      "should_refuse": false,
+      "description": "개근 요건과 주휴수당 관계"
+    },
+    {
+      "question": "한 주에 3일 일하는 알바도 주휴수당을 받을 수 있나요?",
+      "category": "주휴수당",
+      "expected_keywords": ["15시간"],
+      "expected_law": null,
+      "should_refuse": false,
+      "description": "주 3일 근무 시 주휴수당 지급 요건"
+    },
+    {
+      "question": "연차는 1년에 며칠이나 생기나요?",
+      "category": "연차",
+      "expected_keywords": ["15일", "80%"],
+      "expected_law": "제60조",
+      "should_refuse": false,
+      "description": "연차 발생 기준일수 + 출근율 80%"
+    },
+    {
+      "question": "입사 1년이 안 됐는데 연차가 있나요?",
+      "category": "연차",
+      "expected_keywords": ["1개월", "1일"],
+      "expected_law": null,
+      "should_refuse": false,
+      "description": "1년 미만 근무자 월 단위 연차 발생"
+    },
+    {
+      "question": "안 쓴 연차를 돈으로 받을 수 있나요?",
+      "category": "연차",
+      "expected_keywords": ["연차수당", "통상임금"],
+      "expected_law": null,
+      "should_refuse": false,
+      "description": "미사용 연차의 수당 전환"
+    },
+    {
+      "question": "회사가 내 연차를 강제로 쓰게 할 수 있나요?",
+      "category": "연차",
+      "expected_keywords": ["촉진"],
+      "expected_law": null,
+      "should_refuse": false,
+      "description": "연차 사용 촉진 제도 존재 여부"
+    },
+    {
+      "question": "퇴사할 때 남은 연차는 어떻게 되나요?",
+      "category": "연차",
+      "expected_keywords": ["수당"],
+      "expected_law": null,
+      "should_refuse": false,
+      "description": "퇴직 시 잔여 연차 처리"
+    },
+    {
+      "question": "퇴직금을 받으려면 얼마나 일해야 하나요?",
+      "category": "퇴직금",
+      "expected_keywords": ["1년", "4주"],
+      "expected_law": null,
+      "should_refuse": false,
+      "description": "퇴직금 수급 요건 (1년 + 주 15시간)"
+    },
+    {
+      "question": "퇴직금 계산은 어떻게 하나요?",
+      "category": "퇴직금",
+      "expected_keywords": ["평균임금", "30일"],
+      "expected_law": null,
+      "should_refuse": false,
+      "description": "퇴직금 산정 공식"
+    },
+    {
+      "question": "회사가 퇴직금을 안 주면 어떻게 하나요?",
+      "category": "퇴직금",
+      "expected_keywords": ["14일"],
+      "expected_law": null,
+      "should_refuse": false,
+      "description": "퇴직금 미지급 시 대응 방법과 지급 기한"
+    },
+    {
+      "question": "권고사직을 당했는데 퇴직금을 받을 수 있나요?",
+      "category": "퇴직금",
+      "expected_keywords": ["퇴직금"],
+      "expected_law": null,
+      "should_refuse": false,
+      "description": "권고사직과 퇴직금 지급 여부"
+    },
+    {
+      "question": "갑자기 해고 통보를 받았는데 며칠 전에 알려줘야 하나요?",
+      "category": "해고",
+      "expected_keywords": ["30일"],
+      "expected_law": "제26조",
+      "should_refuse": false,
+      "description": "해고 예고 기간 30일"
+    },
+    {
+      "question": "해고 예고 없이 바로 자르면 수당을 받을 수 있나요?",
+      "category": "해고",
+      "expected_keywords": ["30일분", "평균임금"],
+      "expected_law": null,
+      "should_refuse": false,
+      "description": "해고 예고수당 지급 기준"
+    },
+    {
+      "question": "부당해고를 당하면 어떻게 신고하나요?",
+      "category": "해고",
+      "expected_keywords": ["노동위원회"],
+      "expected_law": null,
+      "should_refuse": false,
+      "description": "부당해고 구제신청 절차"
+    },
+    {
+      "question": "수습기간 중에도 해고 예고를 해야 하나요?",
+      "category": "해고",
+      "expected_keywords": ["3개월"],
+      "expected_law": null,
+      "should_refuse": false,
+      "description": "수습기간 해고 예고 예외 규정"
+    },
+    {
+      "question": "근로계약서를 안 쓰면 사업주가 처벌받나요?",
+      "category": "근로계약",
+      "expected_keywords": ["500만원"],
+      "expected_law": "제17조",
+      "should_refuse": false,
+      "description": "근로계약서 미작성 벌칙 500만원 이하 벌금"
+    },
+    {
+      "question": "근로계약서에 꼭 써야 하는 내용이 뭔가요?",
+      "category": "근로계약",
+      "expected_keywords": ["임금", "근로시간"],
+      "expected_law": null,
+      "should_refuse": false,
+      "description": "근로계약서 필수 기재사항"
+    },
+    {
+      "question": "말로만 약속하고 계약서 없이 일했는데 법적 효력이 있나요?",
+      "category": "근로계약",
+      "expected_keywords": ["효력"],
+      "expected_law": null,
+      "should_refuse": false,
+      "description": "구두 근로계약의 법적 효력"
+    },
+    {
+      "question": "수습기간이라고 최저임금보다 적게 줘도 되나요?",
+      "category": "최저임금",
+      "expected_keywords": ["90%", "3개월"],
+      "expected_law": null,
+      "should_refuse": false,
+      "description": "수습근로자 최저임금 감액 기준"
+    },
+    {
+      "question": "최저임금보다 낮게 계약해도 그 계약이 유효한가요?",
+      "category": "최저임금",
+      "expected_keywords": ["무효"],
+      "expected_law": null,
+      "should_refuse": false,
+      "description": "최저임금 이하 계약의 효력"
+    },
+    {
+      "question": "최저임금을 안 지키면 사업주는 어떤 처벌을 받나요?",
+      "category": "최저임금",
+      "expected_keywords": ["징역", "벌금"],
+      "expected_law": null,
+      "should_refuse": false,
+      "description": "최저임금법 위반 시 형사처벌"
+    },
+    {
+      "question": "하루 8시간을 넘겨 일하면 수당을 더 받나요?",
+      "category": "근로시간",
+      "expected_keywords": ["연장", "50%"],
+      "expected_law": null,
+      "should_refuse": false,
+      "description": "연장근로 가산수당 50%"
+    },
+    {
+      "question": "야간에 일하면 수당을 추가로 받을 수 있나요?",
+      "category": "근로시간",
+      "expected_keywords": ["22시", "50%"],
+      "expected_law": null,
+      "should_refuse": false,
+      "description": "야간근로 기준 시간과 가산수당"
+    },
+    {
+      "question": "휴게시간은 하루에 얼마나 줘야 하나요?",
+      "category": "근로시간",
+      "expected_keywords": ["30분", "4시간"],
+      "expected_law": "제54조",
+      "should_refuse": false,
+      "description": "휴게시간 부여 기준"
+    },
+    {
+      "question": "임금을 제때 안 주면 어떻게 해야 하나요?",
+      "category": "임금체불",
+      "expected_keywords": ["고용노동부"],
+      "expected_law": null,
+      "should_refuse": false,
+      "description": "임금체불 신고 방법"
+    },
+    {
+      "question": "퇴사 후 며칠 안에 임금을 받아야 하나요?",
+      "category": "임금체불",
+      "expected_keywords": ["14일"],
+      "expected_law": null,
+      "should_refuse": false,
+      "description": "퇴직 후 임금 지급 기한"
+    },
+    {
+      "question": "사장이 매일 욕설을 하는데 직장 내 괴롭힘에 해당하나요?",
+      "category": "직장내괴롭힘",
+      "expected_keywords": ["직장 내 괴롭힘"],
+      "expected_law": "제76조의2",
+      "should_refuse": false,
+      "description": "직장 내 괴롭힘 정의 및 해당 여부"
+    },
+    {
+      "question": "민사소송에서 손해배상 청구 절차가 어떻게 되나요?",
+      "category": "out_of_scope",
+      "expected_keywords": [],
+      "expected_law": null,
+      "should_refuse": true,
+      "description": "민사소송 절차 - 노동법 문서 밖"
+    },
+    {
+      "question": "임대차 계약에서 보증금 반환을 못 받으면 어떻게 하나요?",
+      "category": "out_of_scope",
+      "expected_keywords": [],
+      "expected_law": null,
+      "should_refuse": true,
+      "description": "부동산 임대차 - 노동법 문서 밖"
+    },
+    {
+      "question": "국민건강보험 급여 항목을 알려주세요",
+      "category": "out_of_scope",
+      "expected_keywords": [],
+      "expected_law": null,
+      "should_refuse": true,
+      "description": "건강보험 급여 - 노동법 문서 밖"
+    }
+  ]
+}
