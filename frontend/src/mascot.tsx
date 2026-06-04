@@ -29,7 +29,7 @@ export const Wordmark: React.FC = () => (
     </div>
     <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1 }}>
       <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--lw-ink)', letterSpacing: '-0.01em' }}>
-        LawDong
+        Lodi
       </span>
       <span style={{ fontSize: 10.5, fontWeight: 500, color: 'var(--lw-muted)', marginTop: 3, letterSpacing: '0.02em' }}>
         Labor Law · Source-grounded
