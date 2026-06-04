@@ -24,8 +24,10 @@ import argparse
 import json
 import os
 import sys
+import time
 import uuid
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")
@@ -53,14 +55,26 @@ def load_chain():
 # ──────────────────────────────────────────────────────────────
 # 단일 케이스 평가
 # ──────────────────────────────────────────────────────────────
+CALL_DELAY = 2.0   # API 호출 간 딜레이 (초) — rate limit 방어
+TIMEOUT    = 60    # 케이스당 최대 대기 시간 (초)
+
+
 def evaluate_case(chain, case: dict) -> dict:
     session_id = f"eval_{uuid.uuid4().hex}"
-    try:
+
+    def _invoke():
         response = chain.invoke(
             {"input": case["question"]},
             config={"configurable": {"session_id": session_id}},
         )
-        answer = response.get("answer", str(response)) if isinstance(response, dict) else str(response)
+        return response.get("answer", str(response)) if isinstance(response, dict) else str(response)
+
+    try:
+        with ThreadPoolExecutor(max_workers=1) as ex:
+            future = ex.submit(_invoke)
+            answer = future.result(timeout=TIMEOUT)
+    except FuturesTimeoutError:
+        answer = f"[TIMEOUT] {TIMEOUT}초 초과"
     except Exception as exc:
         answer = f"[ERROR] {exc}"
 
@@ -198,6 +212,8 @@ def main() -> None:
         status = "✓" if result["passed"] else "✗"
         print(status)
         records.append(result)
+        if i < len(cases):
+            time.sleep(CALL_DELAY)
 
     print_results(records, verbose=args.verbose, fail_only=args.fail_only)
 
