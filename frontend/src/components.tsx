@@ -66,6 +66,7 @@ export const BotBubble: React.FC<{ msg: Message }> = ({ msg }) => (
         background: 'var(--lw-surface)', border: '1px solid var(--lw-line)',
         borderRadius: '4px 16px 16px 16px', padding: '14px 18px',
         fontSize: 14.5, lineHeight: 1.7, color: 'var(--lw-ink)',
+        whiteSpace: 'pre-wrap',
       }}>
         <RichText text={msg.text} />
 
