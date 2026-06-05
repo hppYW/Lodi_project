@@ -29,7 +29,6 @@
 
 import os
 from dotenv import load_dotenv
-# 1. Groq 패키지로 임포트 변경
 from langchain_upstage import ChatUpstage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.output_parsers import StrOutputParser
@@ -39,7 +38,7 @@ from langchain_core.runnables.history import RunnableWithMessageHistory
 from .vectorstore import get_vectorstore, search_with_reranking
 from .memory import get_session_history
 
-# backend/.env.example 에서 OPENAI_API_KEY 로드
+# backend/.env 에서 UPSTAGE_API_KEY 로드
 load_dotenv()
 
 
@@ -172,7 +171,7 @@ def _rewrite_query(chat_llm: ChatUpstage, user_input: str) -> str:
     서비스가 중단되지 않도록 합니다 (graceful degradation).
 
     Args:
-        chat_llm: OpenAI Chat 모델 인스턴스
+        chat_llm: Upstage Solar Chat 모델 인스턴스
         user_input: 사용자의 원본 질문
 
     Returns:
@@ -261,7 +260,7 @@ def get_rag_chain():
       └───────┬─────────┘
               ▼
       ┌─────────────────┐
-      │  LLM 답변 생성    │  OpenAI gpt-4o-mini
+      │  LLM 답변 생성    │  Upstage Solar
       └───────┬─────────┘
               ▼
       ┌─────────────────┐

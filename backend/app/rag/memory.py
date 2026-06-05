@@ -31,7 +31,7 @@ from langchain_core.messages import BaseMessage
 # ── 설정 상수 ──
 # 최대 유지할 대화 턴 수 (1턴 = 사용자 질문 1개 + AI 응답 1개 = 메시지 2개)
 # 5턴이면 최대 10개 메시지가 유지됨
-# → Qwen2.5-7B-Instruct의 컨텍스트 윈도우(32K 토큰)를 고려한 설정
+# → Upstage Solar 모델의 컨텍스트 윈도우를 고려한 설정
 MAX_TURNS = 5
 
 # ── 세션 저장소 ──
