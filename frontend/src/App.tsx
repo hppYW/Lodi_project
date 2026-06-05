@@ -1,12 +1,25 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { Theme, Message, Chat } from './types';
-import { Wordmark } from './mascot';
-import { Mascot } from './mascot';
+import { Wordmark, Mascot } from './mascot';
 import { UserBubble, BotBubble, TypingBubble } from './components';
 import { SUGGESTED_QUESTIONS, fmtTime } from './data';
 
-// 백엔드 API 주소 — uvicorn app.main:app --reload 로 실행
 const API_URL = 'http://localhost:8000';
+const STORAGE_KEY = 'lw-chats';
+
+function loadChats(): Chat[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw) as Chat[];
+  } catch { /* ignore */ }
+  return [];
+}
+
+function saveChats(chats: Chat[]): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(chats.slice(0, 50)));
+  } catch { /* ignore */ }
+}
 
 function loadTheme(): Theme {
   try {
@@ -23,32 +36,103 @@ const iconBtnStyle: React.CSSProperties = {
 };
 
 // ─────────────────────────────────────────────────────────────
+// Sidebar
+// ─────────────────────────────────────────────────────────────
+const Sidebar: React.FC<{
+  chats: Chat[];
+  activeChatId: string | null;
+  onSelect: (id: string) => void;
+  onNew: () => void;
+  onDelete: (id: string) => void;
+}> = ({ chats, activeChatId, onSelect, onNew, onDelete }) => (
+  <aside style={{
+    width: 220, flexShrink: 0,
+    borderRight: '1px solid var(--lw-line)',
+    background: 'var(--lw-surface)',
+    display: 'flex', flexDirection: 'column',
+    overflow: 'hidden',
+  }}>
+    <div style={{ padding: '12px 12px 8px', flexShrink: 0 }}>
+      <button onClick={onNew} style={{
+        width: '100%', padding: '8px 12px', borderRadius: 8,
+        border: '1px solid var(--lw-line)',
+        background: 'transparent', color: 'var(--lw-ink-2)',
+        fontSize: 12, fontWeight: 600, cursor: 'pointer',
+        display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'inherit',
+      }}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+          <path d="M12 5v14M5 12h14" />
+        </svg>
+        새 대화
+      </button>
+    </div>
+
+    <div style={{ flex: 1, overflowY: 'auto', padding: '0 8px 12px' }}>
+      {chats.length === 0 ? (
+        <p style={{
+          padding: '24px 8px', textAlign: 'center',
+          fontSize: 11.5, color: 'var(--lw-muted)', lineHeight: 1.6,
+        }}>
+          대화 기록이 없습니다
+        </p>
+      ) : chats.map(chat => (
+        <div
+          key={chat.id}
+          onClick={() => onSelect(chat.id)}
+          style={{
+            padding: '8px 8px 8px 12px', borderRadius: 8, cursor: 'pointer',
+            background: chat.id === activeChatId ? 'var(--lw-line-soft)' : 'transparent',
+            border: `1px solid ${chat.id === activeChatId ? 'var(--lw-line)' : 'transparent'}`,
+            marginBottom: 2, display: 'flex', alignItems: 'center', gap: 4,
+          }}
+        >
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{
+              fontSize: 12.5, fontWeight: 500, color: 'var(--lw-ink)',
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            }}>
+              {chat.title || '새 대화'}
+            </div>
+            <div style={{ fontSize: 10.5, color: 'var(--lw-muted)', marginTop: 2 }}>
+              {new Date(chat.updatedAt).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })}
+            </div>
+          </div>
+          <button
+            onClick={e => { e.stopPropagation(); onDelete(chat.id); }}
+            title="삭제"
+            style={{
+              flexShrink: 0, width: 20, height: 20, borderRadius: 4,
+              border: 'none', background: 'transparent',
+              color: 'var(--lw-muted)', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: 0, opacity: 0.5,
+            }}
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      ))}
+    </div>
+  </aside>
+);
+
+// ─────────────────────────────────────────────────────────────
 // TopBar
 // ─────────────────────────────────────────────────────────────
 const TopBar: React.FC<{
   theme: Theme; onToggleTheme: () => void;
-  onNewChat: () => void; hasMessages: boolean;
-}> = ({ theme, onToggleTheme, onNewChat, hasMessages }) => (
+}> = ({ theme, onToggleTheme }) => (
   <header style={{
     height: 52, borderBottom: '1px solid var(--lw-line)',
     background: 'var(--lw-surface)', display: 'flex', alignItems: 'center',
     padding: '0 20px', gap: 12, flexShrink: 0,
   }}>
     <Wordmark />
-
     <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
-      {hasMessages && (
-        <button onClick={onNewChat} style={{
-          display: 'flex', alignItems: 'center', gap: 6,
-          padding: '6px 12px', borderRadius: 8, border: '1px solid var(--lw-line)',
-          background: 'transparent', color: 'var(--lw-ink-2)',
-          fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-        }} title="새 대화">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
-          새 대화
-        </button>
-      )}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 6,
         padding: '5px 10px', borderRadius: 999, background: 'var(--lw-line-soft)',
@@ -233,23 +317,43 @@ const Composer: React.FC<{
 // ─────────────────────────────────────────────────────────────
 const App: React.FC = () => {
   const [theme, setTheme] = useState<Theme>(loadTheme);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [sessionId, setSessionId] = useState(() => 'c-' + Date.now());
+  const [chats, setChats] = useState<Chat[]>(loadChats);
+  const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
 
+  const activeChat = activeChatId ? (chats.find(c => c.id === activeChatId) ?? null) : null;
+  const messages = activeChat?.messages ?? [];
+
+  // 채팅 목록 변경 시 localStorage 저장
+  useEffect(() => { saveChats(chats); }, [chats]);
+
+  // 테마 변경 시 localStorage 저장
   useEffect(() => {
     try { localStorage.setItem('lw-theme', theme); } catch { /* ignore */ }
   }, [theme]);
 
-  const toggleTheme = useCallback(() => {
-    setTheme(t => t === 'light' ? 'dark' : 'light');
-  }, []);
+  // 삭제된 채팅이 활성화된 경우 초기화
+  useEffect(() => {
+    if (activeChatId && !chats.find(c => c.id === activeChatId)) {
+      setActiveChatId(null);
+    }
+  }, [chats, activeChatId]);
+
+  const toggleTheme = useCallback(() => setTheme(t => t === 'light' ? 'dark' : 'light'), []);
 
   const newChat = useCallback(() => {
-    setMessages([]);
-    setSessionId('c-' + Date.now());
+    setActiveChatId(null);
     setDraft('');
+  }, []);
+
+  const selectChat = useCallback((id: string) => {
+    setActiveChatId(id);
+    setDraft('');
+  }, []);
+
+  const deleteChat = useCallback((id: string) => {
+    setChats(prev => prev.filter(c => c.id !== id));
   }, []);
 
   const send = useCallback((text: string) => {
@@ -257,6 +361,9 @@ const App: React.FC = () => {
     if (!trimmed || busy) return;
 
     const now = Date.now();
+    const sessionId = activeChatId ?? ('c-' + now);
+    const isNew = !activeChatId;
+
     const userMsg: Message = {
       id: 'u-' + now, role: 'user', text: trimmed, timestamp: fmtTime(now),
     };
@@ -265,7 +372,21 @@ const App: React.FC = () => {
       searchingDocs: ['근로기준법', '최저임금법', '근로자퇴직급여 보장법'],
     };
 
-    setMessages(prev => [...prev, userMsg, typingMsg]);
+    setChats(prev => {
+      if (isNew) {
+        const title = trimmed.length > 22 ? trimmed.slice(0, 22) + '…' : trimmed;
+        return [{
+          id: sessionId, title,
+          createdAt: now, updatedAt: now, pinned: false,
+          messages: [userMsg, typingMsg],
+        }, ...prev];
+      }
+      return prev.map(c => c.id !== sessionId ? c : {
+        ...c, messages: [...c.messages, userMsg, typingMsg], updatedAt: now,
+      });
+    });
+
+    if (isNew) setActiveChatId(sessionId);
     setDraft('');
     setBusy(true);
 
@@ -274,10 +395,7 @@ const App: React.FC = () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ question: trimmed, session_id: sessionId }),
     })
-      .then(res => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
-      })
+      .then(res => { if (!res.ok) throw new Error(`HTTP ${res.status}`); return res.json(); })
       .then(data => {
         const replyTime = Date.now();
         const botMsg: Message = {
@@ -285,7 +403,11 @@ const App: React.FC = () => {
           text: data.reply, timestamp: fmtTime(replyTime),
           sources: data.sources || [],
         };
-        setMessages(prev => prev.filter(m => m.role !== 'typing').concat(botMsg));
+        setChats(prev => prev.map(c => c.id !== sessionId ? c : {
+          ...c,
+          messages: c.messages.filter(m => m.role !== 'typing').concat(botMsg),
+          updatedAt: Date.now(),
+        }));
       })
       .catch(() => {
         const replyTime = Date.now();
@@ -295,10 +417,14 @@ const App: React.FC = () => {
             + '실행 방법: cd backend && uvicorn app.main:app --reload',
           timestamp: fmtTime(replyTime),
         };
-        setMessages(prev => prev.filter(m => m.role !== 'typing').concat(botMsg));
+        setChats(prev => prev.map(c => c.id !== sessionId ? c : {
+          ...c,
+          messages: c.messages.filter(m => m.role !== 'typing').concat(botMsg),
+          updatedAt: Date.now(),
+        }));
       })
       .finally(() => setBusy(false));
-  }, [busy, sessionId]);
+  }, [busy, activeChatId]);
 
   const handleSend = useCallback(() => send(draft), [send, draft]);
   const handlePick = useCallback((q: string) => {
@@ -312,17 +438,26 @@ const App: React.FC = () => {
       fontFamily: '"Noto Sans KR", system-ui, sans-serif',
       display: 'flex', flexDirection: 'column', overflow: 'hidden',
     }}>
-      <TopBar theme={theme} onToggleTheme={toggleTheme}
-              onNewChat={newChat} hasMessages={messages.length > 0} />
+      <TopBar theme={theme} onToggleTheme={toggleTheme} />
 
-      {messages.length > 0 ? (
-        <Conversation chat={{ id: sessionId, title: '', createdAt: 0, updatedAt: 0, pinned: false, messages }} />
-      ) : (
-        <WelcomeScreen onPick={handlePick} />
-      )}
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+        <Sidebar
+          chats={chats}
+          activeChatId={activeChatId}
+          onSelect={selectChat}
+          onNew={newChat}
+          onDelete={deleteChat}
+        />
 
-      <Composer value={draft} onChange={setDraft}
-                onSend={handleSend} disabled={busy} />
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          {messages.length > 0 ? (
+            <Conversation chat={activeChat!} />
+          ) : (
+            <WelcomeScreen onPick={handlePick} />
+          )}
+          <Composer value={draft} onChange={setDraft} onSend={handleSend} disabled={busy} />
+        </div>
+      </div>
     </div>
   );
 };
