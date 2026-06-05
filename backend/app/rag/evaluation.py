@@ -159,45 +159,38 @@ class EvalResult:
 # 3. 평가 로직
 # ────────────────────────────────────────────────────────────
 
-def evaluate_single(answer: str, test_case: TestCase) -> EvalResult:
+def evaluate_single(answer: str, test_case: TestCase, context: str = "") -> EvalResult:
     """
     단일 답변을 테스트 케이스 기준으로 평가합니다.
 
     [평가 기준]
-      ① 출처 정확도: expected_sources의 키워드가 답변에 포함되어 있는지
-         예: "근로기준법 제55조"가 기대 출처이면, 답변에 "제55조"가 있는지 확인
+      ① 출처 정확도: 검색된 문서(context)에 기대 출처 키워드가 포함되어 있는지
+         → LLM 답변이 아닌 검색 결과로 판단 (출처 표시는 chat.py가 뱃지로 담당)
 
       ② 키워드 적중: expected_keywords가 답변에 포함되어 있는지
-         예: ["15시간", "유급휴일"]이 기대 키워드이면, 둘 다 답변에 있는지 확인
 
-      ③ 거부 정확도:
-         - should_refuse=True → "찾을 수 없습니다" 또는 "문의"가 답변에 있어야 통과
-         - should_refuse=False → "찾을 수 없습니다"가 답변에 없어야 통과
+      ③ 거부 정확도: 도메인 외 질문을 올바르게 거부했는지
 
     Args:
         answer: RAG 체인이 생성한 답변 텍스트
         test_case: 해당 테스트 케이스
-
-    Returns:
-        EvalResult 평가 결과 객체
+        context: 검색된 문서 컨텍스트 (출처 정확도 평가용)
     """
     answer_lower = answer.lower()
 
     # ── ① 출처 정확도 평가 ──
-    # 기대하는 법 조항이 답변에 언급되었는지 확인
-    # 각 출처 문자열의 모든 단어가 답변에 포함되어야 함
-    # 예: "근로기준법 제55조" → "근로기준법"과 "제55조"가 모두 답변에 있는지
+    # 검색된 문서(context)에 기대 출처가 포함되어 있는지 확인
+    # LLM 답변 텍스트가 아닌 검색 결과를 기준으로 판단
+    check_text = context if context else answer
     if test_case.expected_sources:
         source_hit = all(
-            all(part in answer for part in src.split())
+            all(part in check_text for part in src.split())
             for src in test_case.expected_sources
         )
     else:
-        # 기대 출처가 없는 경우 (거부 질문 등) → 무조건 통과
         source_hit = True
 
     # ── ② 키워드 적중률 평가 ──
-    # 핵심 키워드가 답변에 포함되었는지 확인 (대소문자 무시)
     keyword_hit = all(
         kw.lower() in answer_lower
         for kw in test_case.expected_keywords
@@ -205,10 +198,8 @@ def evaluate_single(answer: str, test_case: TestCase) -> EvalResult:
 
     # ── ③ 거부 정확도 평가 ──
     if test_case.should_refuse:
-        # 거부해야 할 질문: "찾을 수 없습니다" 또는 "문의"가 포함되어야 함
         refuse_correct = "찾을 수 없습니다" in answer or "문의" in answer
     else:
-        # 답변해야 할 질문: "찾을 수 없습니다"가 포함되면 안 됨
         refuse_correct = "찾을 수 없습니다" not in answer
 
     return EvalResult(
@@ -264,18 +255,20 @@ def run_evaluation(rag_chain) -> list[EvalResult]:
                 config={"configurable": {"session_id": f"eval-{i}"}},
             )
 
-            # 응답에서 답변 텍스트 추출
-            # 체인 반환 형식에 따라 문자열 또는 딕셔너리일 수 있음
+            # 응답에서 답변 텍스트와 검색 컨텍스트 추출
             if isinstance(response, str):
                 answer = response
+                context = ""
             else:
                 answer = response.get("answer", str(response))
+                context = response.get("context", "")
 
         except Exception as e:
             answer = f"[오류 발생] {str(e)}"
+            context = ""
 
-        # 답변 평가
-        result = evaluate_single(answer, tc)
+        # 답변 평가 (출처는 검색된 문서 컨텍스트에서 확인)
+        result = evaluate_single(answer, tc, context=context)
         results.append(result)
 
         # ── 개별 결과 출력 ──

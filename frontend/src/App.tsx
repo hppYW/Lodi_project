@@ -190,7 +190,7 @@ const WelcomeScreen: React.FC<{ onPick: (q: string) => void }> = ({ onPick }) =>
       fontSize: 10.5, color: 'var(--lw-muted)',
       fontFamily: '"JetBrains Mono", monospace', letterSpacing: '0.02em',
     }}>
-      <span>공식 문서 <span style={{ color: 'var(--lw-ink-2)', fontWeight: 600 }}>87</span>건</span>
+      <span>공식 문서 <span style={{ color: 'var(--lw-ink-2)', fontWeight: 600 }}>4</span>건</span>
       <span style={{ width: 3, height: 3, background: 'var(--lw-line)', borderRadius: '50%' }} />
       <span>추측 답변 <span style={{ color: 'var(--lw-red)', fontWeight: 600 }}>0</span>건</span>
     </div>
