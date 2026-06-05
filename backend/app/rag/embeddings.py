@@ -17,6 +17,12 @@ def get_embedding_model():
 
 def clean_text(text: str) -> str:
     """PDF에서 긁어온 텍스트에서 검색 정확도를 떨어뜨리는 불순물(노이즈)을 정교하게 제거하는 함수"""
+
+    # 0. [신규 추가] 법제처 PDF 특유의 머리말/꼬리말 쓰레기값 완벽 제거
+    # (예: "법제처 2 국가법령정보센터", "법제처 1 국" 등 파편화된 노이즈 삭제)
+    text = re.sub(r'법제처\s*\d*\s*국가법령정보센터', '', text)
+    text = re.sub(r'법제처\s*\d*\s*국?', '', text)
+
     # 1. 페이지 상/하단에 반복적으로 찍히는 쪽수와 책 제목 제거 (예: "370/ 근로기준법 질의회시집")
     text = re.sub(r'\d+\s*/\s*[가-힣\s]+.*?\n', '', text)
 
@@ -24,8 +30,10 @@ def clean_text(text: str) -> str:
     # 이대로 DB에 넣으면 검색 키워드가 끊기기 때문에, 한글과 한글 사이에 있는 줄바꿈은 띄어쓰기로 합쳐줌.
     text = re.sub(r'(?<=[가-힣,])\n(?=[가-힣])', ' ', text)
 
-    # 3. 쓸데없이 엔터가 여러 번 쳐져 있는 공백 구간 정리 (가독성 향상)
-    text = re.sub(r'\n{3,}', '\n\n', text)
+    # 3. 쓸데없이 띄어쓰기나 엔터가 여러 번 쳐져 있는 공백 구간 정리 (가독성 향상)
+    text = re.sub(r' {2,}', ' ', text)     # 띄어쓰기 2번 이상 -> 1번으로 압축
+    text = re.sub(r'\n{3,}', '\n\n', text) # 엔터 3번 이상 -> 2번으로 압축
+
     return text.strip()
 
 def load_and_chunk_pdf(file_path: str):
